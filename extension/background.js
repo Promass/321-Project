@@ -3,13 +3,13 @@
  * Even if we change website this session will persist. Any data here will be kept until the browser is closed.
  * It is best to make API calls from here.
  */
+import { analyzePolicy } from './apiFunctions.js';
 
 let host = "";
 let texts = {};
 
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener(async (request) => {
   if (request.message === "privacy-policy-found") {
-    // Get data from content.js
     if (!host) {
       host = request.data.host;
       texts[request.data.page] = request.data.text;
@@ -20,23 +20,35 @@ chrome.runtime.onMessage.addListener((request) => {
       texts[request.data.page] = request.data.text;
     }
   } else if (request.message === "analyze-text") {
+    await analyzePolicy(texts[request.data.page])
+        .then(result => {
+          const removedMarkdownResult = result.response.candidates[0].content.parts[0].text.replace(/`/g, "").replace(/^json\s+/i, '');
+          const analysisJson = JSON.parse(removedMarkdownResult)
+
+          const analysisData = analysisJson.concerns.map((concern) => ({
+            policy: concern.description,
+            threatLevel: concern.risk_level,
+          }));
+
+          chrome.runtime.sendMessage({
+            // Send data to popup.js
+            message: "analyzed-text",
+            data: {
+              analysis: analysisData
+            },
+          });
+        })
+        .catch(error => {
+          console.error('Error analyzing policy:', error);
+        });
     // Data request from popup.js
-    chrome.runtime.sendMessage({
-      // Send data to popup.js
-      message: "analyzed-text",
-      data: {
-        analysis: [
-          { policy: "Policy 1", threatLevel: 1 },
-          { policy: "Policy 2", threatLevel: 3 },
-        ],
-      },
-    });
+
   } else if (request.message === "what-to-analyze") {
     // Data request from popup.js
     chrome.runtime.sendMessage({
       // Send data to popup.js
       message: "things-to-analyze",
-      data: { host, toAnalyze: Object.keys(texts).length },
+      data: { host: request.data.host, toAnalyze: Object.keys(texts).length },
     });
   }
 });
