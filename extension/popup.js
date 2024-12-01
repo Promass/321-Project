@@ -3,36 +3,23 @@
  */
 
 // Request background.js if there are any data to analyze
-// Fetch the host of the current tab when the popup opens
 chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
   let activeTab = tabs[0];
   let host = new URL(activeTab.url).hostname;
-  let page = new URL(activeTab.url).pathname;
 
   chrome.scripting.executeScript(
-      {
-        target: { tabId: activeTab.id },
-        func: function () {
-          return document.body.innerText;
-        },
+    {
+      target: { tabId: activeTab.id },
+      func: () => {
+        return;
       },
-      async (injectionResults) => {
-        const innerText = injectionResults[0].result;
-        const cleanedText = cleanText(innerText);
-        const hasKeyword = containsKeyword(cleanedText);
-
-        if (hasKeyword) {
-          await chrome.runtime.sendMessage({
-            message: "privacy-policy-found",
-            data: {host, page, text: cleanedText},
-          });
-
-          chrome.runtime.sendMessage({
-            message: "what-to-analyze",
-            data: { host },
-          });
-        }
-      }
+    },
+    async () => {
+      chrome.runtime.sendMessage({
+        message: "what-to-analyze",
+        data: { host },
+      });
+    }
   );
 });
 
@@ -43,14 +30,14 @@ analyze.addEventListener("click", async () => {
   const loadingMessage = document.createElement("p");
   loadingMessage.innerHTML = "Fetching data... Please wait.";
   msg.appendChild(loadingMessage);
-  
+
   analyze.style.display = "none";
 
-  chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     let activeTab = tabs[0];
-    let page = new URL(activeTab.url).pathname;
+    let host = new URL(activeTab.url).hostname;
 
-    chrome.runtime.sendMessage({ message: "analyze-text", data: { page } });
+    chrome.runtime.sendMessage({ message: "analyze-text", data: { host } });
   });
 });
 
@@ -85,9 +72,9 @@ chrome.runtime.onMessage.addListener((request) => {
     if (request.data.toAnalyze == 0) {
       const p1 = document.createElement("p");
       const p2 = document.createElement("p");
-      p1.innerHTML = "No data to analyze.";
+      p1.innerHTML = `No data to analyze for host ${request.data.host}.`;
       p2.innerHTML =
-        "Please keep visiting the other pages of the website (specialy policy pages) to extract info for analysis.";
+        "Please keep visiting the other pages of the website (especially policy pages) to extract info for analysis.";
       msg.appendChild(p1);
       msg.appendChild(p2);
     } else {
@@ -98,59 +85,3 @@ chrome.runtime.onMessage.addListener((request) => {
     }
   }
 });
-
-function cleanText(rawText) {
-  let cleanedText = rawText
-      .replace(/\s+/g, " ") // Replace multiple spaces with a single space
-      .replace(/\n\s*\n/g, "\n") // Remove multiple blank lines
-      .trim(); // Trim leading and trailing spaces
-
-  return cleanedText;
-}
-
-function containsKeyword(text) {
-  for (const keyword of keywords) {
-    if (text.includes(keyword)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-const keywords = [
-  "Privacy",
-  "privacy",
-  "Policy",
-  "policy",
-  "Data Protection",
-  "data protection",
-  "Personal Data",
-  "personal data",
-  "Confidentiality",
-  "confidentiality",
-  "Anonymity",
-  "anonymity",
-  "Encryption",
-  "encryption",
-  "Consent",
-  "consent",
-  "Security",
-  "security",
-  "Terms",
-  "terms",
-  "Conditions",
-  "conditions",
-  "Compliance",
-  "compliance",
-  "Governance",
-  "governance",
-  "Agreement",
-  "agreement",
-  "Cookies",
-  "cookies",
-  "Disclosure",
-  "disclosure",
-  "Retention",
-  "retention",
-];
